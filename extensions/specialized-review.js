@@ -288,15 +288,13 @@ function buildDispatchPrompt(parsed, git, selected) {
     const runId = new Date().toISOString().replace(/[:.]/g, "-");
     return `Run the specialized code review requested through the \`pi-specialized-review\` extension.
 
-This extension keeps reviewer artifacts private: it does not install Pi prompt templates, skills, or discoverable subagent files. For this run, use the existing \`subagent\` tool from \`pi-subagents\` and launch the built-in \`reviewer\` agent with the role contracts below embedded in each task. Do not create, update, or delete persistent subagent definitions.
+This extension keeps reviewer artifacts private: it does not install Pi prompt templates, skills, or discoverable subagent files. For this run, use the existing \`subagent\` tool from \`pi-subagents\` and launch the built-in \`reviewer\` agent with one private contract path per child task. Do not paste full reviewer contracts into this parent prompt, and do not create, update, or delete persistent subagent definitions.
 
 ${buildRunSummarySection(parsed, target, focus, selected)}
 
 ${buildGitSnapshotSection(parsed, git)}
 
 ${buildLaunchInstructionsSection(parsed, selected, target, runId)}
-
-${buildSpecialistContractsSection(selected)}
 
 ${buildCoordinatorSynthesisSection(parsed)}`;
 }
@@ -344,7 +342,7 @@ function buildLaunchInstructionsSection(parsed, selected, target, runId) {
 
 Do not perform a full monolithic review first. Launch these reviewers in parallel, with fresh child context unless this prompt says \`fork\`. Each reviewer must inspect the repository and diff directly; the git snapshot above is only dispatch metadata.
 
-Use a \`subagent\` call equivalent to this shape, adapting task strings to include the full specialist contracts below:
+Use a \`subagent\` call equivalent to this shape. Each child task is assigned one absolute private specialist contract path and must read only that contract before reviewing:
 
 \`\`\`text
 subagent({
@@ -357,21 +355,21 @@ ${buildTaskSketch(selected, target, runId)}
 })
 \`\`\`
 
-For every selected reviewer task, include its full private specialist contract from the next section. Set \`skill: false\` to avoid injecting unrelated skills. Ask reviewers to avoid edits and to return only XML.`;
+Set \`skill: false\` to avoid injecting unrelated skills. Ask reviewers to read their assigned contract path before reviewing, ignore other specialist contracts, avoid edits, and return only XML. Fresh context keeps child context isolated; fork context may inherit dispatch metadata, but reviewers must still follow only their assigned contract.`;
 }
 function buildTaskSketch(selected, target, runId) {
     return selected
         .map((id) => {
         const meta = REVIEWER_BY_ID.get(id);
         const label = meta?.label ?? id;
-        return `    { agent: "reviewer", task: "Act as ${id}. Review ${target} for ${label.toLowerCase()} only, using the private specialist contract embedded below. Do not edit files. Return only XML.", output: ".pi/specialized-review/${runId}/${id}.xml", outputMode: "file-only", skill: false, acceptance: "attested" }`;
+        const contractPath = meta?.contractPath;
+        const task = contractPath
+            ? `Act as ${id}. First read the private specialist contract at ${contractPath} and follow it exactly. Review ${target} for ${label.toLowerCase()} only. Do not edit files. Return only XML.`
+            : `Act as ${id}. Report that the private specialist contract path is missing; do not invent a replacement contract.`;
+        const reads = contractPath ? `, reads: [${JSON.stringify(contractPath)}]` : "";
+        return `    { agent: "reviewer", task: ${JSON.stringify(task)}${reads}, output: ".pi/specialized-review/${runId}/${id}.xml", outputMode: "file-only", skill: false, acceptance: "attested" }`;
     })
         .join(",\n");
-}
-function buildSpecialistContractsSection(selected) {
-    return `## Private specialist contracts for this run
-
-${selected.map((id) => buildReviewerBlock(id)).join("\n\n---\n\n")}`;
 }
 function buildCoordinatorSynthesisSection(parsed) {
     return `## Coordinator synthesis
@@ -398,13 +396,6 @@ Final response format:
 
 Keep the final concise and cite file paths and line numbers for all actionable findings.`;
 }
-function buildReviewerBlock(id) {
-    const meta = REVIEWER_BY_ID.get(id);
-    if (!meta) {
-        return `### ${id}: missing reviewer\n\nReviewer contract missing from reviewers/*.md. Report this package installation problem instead of inventing a replacement contract.`;
-    }
-    return `### ${meta.id}: ${meta.label}\n\nDescription: ${meta.description}\n\n${meta.body}`;
-}
 function loadReviewers() {
     const reviewersDir = resolve(packageRoot(), "reviewers");
     if (!existsSync(reviewersDir))
@@ -415,7 +406,8 @@ function loadReviewers() {
         .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id));
 }
 function loadReviewer(fileName) {
-    const raw = readFileSync(resolve(packageRoot(), "reviewers", fileName), "utf8");
+    const contractPath = resolve(packageRoot(), "reviewers", fileName);
+    const raw = readFileSync(contractPath, "utf8");
     const frontmatter = parseFrontmatter(raw);
     const id = String(frontmatter.name || fileName.replace(/\.md$/, "")).trim();
     const description = String(frontmatter.catalogDescription || frontmatter.description || "").trim();
@@ -423,11 +415,11 @@ function loadReviewer(fileName) {
     return {
         id,
         file: fileName,
+        contractPath,
         label: String(frontmatter.label || titleFromId(id)).trim(),
         description: description || `Private reviewer contract from reviewers/${fileName}.`,
         aliases: parseList(frontmatter.aliases),
         order: Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER,
-        body: stripFrontmatter(raw).trim(),
     };
 }
 function parseFrontmatter(markdown) {
@@ -476,9 +468,6 @@ function buildAliases(reviewers) {
 }
 function titleFromId(id) {
     return id.replace(/^sr-/, "").split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
-}
-function stripFrontmatter(markdown) {
-    return markdown.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
 }
 function buildCatalogPrompt() {
     const catalog = REVIEWERS.map((reviewer) => `- \`${reviewer.id}\` — ${reviewer.label}: ${reviewer.description}`).join("\n");

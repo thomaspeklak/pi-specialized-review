@@ -2,7 +2,7 @@
 
 A Pi extension for Cloudflare-style specialized code review: one coordinator inspects the current git diff, selects a small set of non-overlapping reviewer roles, runs them through `pi-subagents`, and synthesizes the results.
 
-This package intentionally exports **only one Pi extension**. It does not export Pi prompt templates, skills, themes, or discoverable subagent definitions. The reviewer contracts live in `reviewers/*.md` as private package files and are injected into a review run only when `/specialized-review` is invoked.
+This package intentionally exports **only one Pi extension**. It does not export Pi prompt templates, skills, themes, or discoverable subagent definitions. The reviewer contracts live in `reviewers/*.md` as private package files and are given to selected child reviewers by file path only when `/specialized-review` is invoked.
 
 ## Requirements
 
@@ -33,7 +33,7 @@ Run `/reload` after changing the extension or reviewer files in an active Pi ses
 /specialized-reviewers
 ```
 
-`/specialized-review` inspects git metadata with read-only commands, selects reviewers, and sends a follow-up coordinator prompt that calls `subagent` with the built-in `reviewer` agent. Each child receives a fresh context by default, `skill: false`, and exactly one private specialist contract.
+`/specialized-review` inspects git metadata with read-only commands, selects reviewers, and sends a compact follow-up coordinator prompt that calls `subagent` with the built-in `reviewer` agent. Each child task is assigned one private specialist contract path to read, uses fresh context by default, and sets `skill: false`. The parent prompt does not embed full reviewer contracts.
 
 `/specialized-reviewers` shows the private reviewer catalog.
 
@@ -66,7 +66,7 @@ The package manifest contains only:
 
 There is no `pi.prompts`, no `pi.skills`, and no `.pi/agents` or `agents/` directory. Pi will load the slash-command extension, while the Markdown reviewer specs stay private package data.
 
-At runtime, the command uses the already-installed `pi-subagents` tool. It does **not** create persistent subagent files and it does **not** ask `pi-subagents` to discover these reviewer specs as agents.
+At runtime, the command uses the already-installed `pi-subagents` tool. It does **not** create persistent subagent files and it does **not** ask `pi-subagents` to discover these reviewer specs as agents. The coordinator prompt passes absolute paths to the packaged Markdown contracts and instructs each selected child reviewer to read its assigned spec.
 
 ## Evolution path
 
