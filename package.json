@@ -1,0 +1,23 @@
+{
+  "name": "pi-specialized-review",
+  "version": "0.1.0",
+  "description": "A Pi extension that dispatches isolated specialist code-review subagents without installing global prompts, skills, or subagent definitions.",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "code-review",
+    "subagents"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "extensions/",
+    "reviewers/",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/specialized-review.js"
+    ]
+  }
+}
