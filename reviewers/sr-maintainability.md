@@ -1,5 +1,9 @@
 ---
 name: sr-maintainability
+label: Maintainability and simplicity
+catalogDescription: Unnecessary complexity, architecture drift, duplication, brittle abstractions, module boundaries, readability, and type/source-of-truth drift. Not speculative rewrites.
+aliases: ["maintainability", "cleanup", "complexity", "architecture"]
+order: 8
 description: Use for readability, unnecessary complexity, architecture drift, duplicated logic, local design friction, module boundaries, type/source-of-truth drift, and cleanup that is clearly worth doing; not for speculative refactors.
 tools: read, grep, find, ls, bash
 thinking: high

@@ -1,5 +1,9 @@
 ---
 name: sr-tests
+label: Tests and validation
+catalogDescription: Missing, weak, flaky, misplaced, or misleading validation caused by the change. Not a broad production-code review unless a test issue exposes a concrete bug.
+aliases: ["test", "tests", "validation"]
+order: 2
 description: Use when code behavior changes, tests change, validation is required, or the diff needs confidence checks; focuses on missing, weak, misplaced, flaky, or misleading tests and commands, not production code style or broad correctness review.
 tools: read, grep, find, ls, bash
 thinking: high

@@ -50,18 +50,7 @@ Run `/reload` after changing the extension or reviewer files in an active Pi ses
 
 ## Reviewer catalog
 
-The private reviewer contracts are in `reviewers/`:
-
-| Reviewer | Owns | Explicitly avoids |
-| --- | --- | --- |
-| `sr-correctness` | concrete functional bugs, regressions, edge cases, behavior mismatch | tests, style, security-only, performance-only, docs, release-process |
-| `sr-tests` | missing, weak, flaky, misplaced, or misleading validation | broad production-code review |
-| `sr-security` | auth, permissions, secrets, untrusted input/output, crypto, privacy, deps, filesystem, subprocesses, network, sandboxing | generic hardening wishlists |
-| `sr-performance` | measurable performance, resource, concurrency, scalability, startup/build/test runtime, caching, DB/query, memory | micro-optimizations |
-| `sr-api-contracts` | exported APIs, CLI, config/env, protocols, schemas, migrations, serialized formats, compatibility | internal refactor preferences |
-| `sr-release-risk` | CI, build, packaging, dependencies, lockfiles, migrations/backfills, feature flags, rollback, observability, deployment | normal app correctness |
-| `sr-docs` | docs, comments, examples, help text, changelog, migration notes, user-facing copy | code review |
-| `sr-maintainability` | unnecessary complexity, architecture drift, duplication, brittle abstractions, module boundaries, readability, source-of-truth drift | speculative rewrites |
+The private reviewer contracts are in `reviewers/`. Each Markdown file is the source of truth for its catalog label, user-facing catalog description, aliases, ordering, and private role contract. `/specialized-reviewers` renders the installed catalog from that frontmatter instead of from duplicated extension metadata.
 
 ## How it avoids leaking into your setup
 

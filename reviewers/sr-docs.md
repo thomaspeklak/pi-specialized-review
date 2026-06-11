@@ -1,5 +1,9 @@
 ---
 name: sr-docs
+label: Docs and user-facing text
+catalogDescription: Docs, comments, examples, help text, changelog, migration notes, and user-facing copy. Not code review.
+aliases: ["docs", "documentation", "comments"]
+order: 7
 description: Use for documentation, README, comments, user-facing copy, examples, help text, changelog, migration notes, or when code changes require docs; not for production code correctness or style.
 tools: read, grep, find, ls, bash
 thinking: high

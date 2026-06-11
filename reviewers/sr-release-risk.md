@@ -1,5 +1,9 @@
 ---
 name: sr-release-risk
+label: Release and operations risk
+catalogDescription: Deploy, CI, build, packaging, dependency, lockfile, migration/backfill, feature-flag, rollback, observability, and operational risks. Not normal app correctness.
+aliases: ["release", "deploy", "ops", "ci"]
+order: 6
 description: Use for deploy, CI, build, packaging, lockfiles, dependency, migration, feature-flag, config, observability, rollback, changelog, or operational-risk changes; not for normal code correctness or style.
 tools: read, grep, find, ls, bash
 thinking: high

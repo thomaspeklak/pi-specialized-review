@@ -1,5 +1,9 @@
 ---
 name: sr-performance
+label: Performance and scalability
+catalogDescription: Measurable performance, resource, concurrency, scalability, startup/build/test runtime, caching, database/query, and memory risks. Not micro-optimization.
+aliases: ["perf", "performance", "scalability"]
+order: 4
 description: Use for hot paths, database queries, loops over unbounded data, concurrency, caching, startup/build time, memory, network calls, streaming, pagination, or resource-lifetime changes; not for style or micro-optimizations.
 tools: read, grep, find, ls, bash
 thinking: high

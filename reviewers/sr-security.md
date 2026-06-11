@@ -1,5 +1,9 @@
 ---
 name: sr-security
+label: Security and privacy
+catalogDescription: Auth, permissions, secrets, untrusted input/output, crypto, privacy, dependency, filesystem, subprocess, network, and sandbox risks. Not generic hardening wishlists.
+aliases: ["security", "sec", "privacy"]
+order: 3
 description: Use for auth, authorization, crypto, secrets, credentials, untrusted input/output, network, file paths, parsing, serialization, privacy, dependency, or permission-boundary changes; flags only exploitable or concretely dangerous issues.
 tools: read, grep, find, ls, bash
 thinking: high

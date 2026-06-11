@@ -1,5 +1,9 @@
 ---
 name: sr-api-contracts
+label: API and compatibility contracts
+catalogDescription: Public API, exported types, CLI, config/env, protocol/schema, migrations, serialized formats, events, plugins, and compatibility risks. Not internal refactor taste.
+aliases: ["api", "contract", "contracts", "compatibility"]
+order: 5
 description: Use for public interfaces, exported types, REST/RPC/GraphQL contracts, CLIs, config/env vars, database schemas, migrations, serialized formats, events, plugin APIs, or compatibility-sensitive changes.
 tools: read, grep, find, ls, bash
 thinking: high

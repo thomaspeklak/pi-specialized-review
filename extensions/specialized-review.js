@@ -1,88 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-const REVIEWERS = [
-    {
-        id: "sr-correctness",
-        file: "sr-correctness.md",
-        label: "Functional correctness",
-        description: "Concrete behavior bugs, regressions, broken edge cases, and changed behavior that does not match intent. Not style, coverage, security-only, performance-only, docs, or release-process feedback.",
-    },
-    {
-        id: "sr-tests",
-        file: "sr-tests.md",
-        label: "Tests and validation",
-        description: "Missing, weak, flaky, misplaced, or misleading validation caused by the change. Not a broad production-code review unless a test issue exposes a concrete bug.",
-    },
-    {
-        id: "sr-security",
-        file: "sr-security.md",
-        label: "Security and privacy",
-        description: "Auth, permissions, secrets, untrusted input/output, crypto, privacy, dependency, filesystem, subprocess, network, and sandbox risks. Not generic hardening wishlists.",
-    },
-    {
-        id: "sr-performance",
-        file: "sr-performance.md",
-        label: "Performance and scalability",
-        description: "Measurable performance, resource, concurrency, scalability, startup/build/test runtime, caching, database/query, and memory risks. Not micro-optimization.",
-    },
-    {
-        id: "sr-api-contracts",
-        file: "sr-api-contracts.md",
-        label: "API and compatibility contracts",
-        description: "Public API, exported types, CLI, config/env, protocol/schema, migrations, serialized formats, events, plugins, and compatibility risks. Not internal refactor taste.",
-    },
-    {
-        id: "sr-release-risk",
-        file: "sr-release-risk.md",
-        label: "Release and operations risk",
-        description: "Deploy, CI, build, packaging, dependency, lockfile, migration/backfill, feature-flag, rollback, observability, and operational risks. Not normal app correctness.",
-    },
-    {
-        id: "sr-docs",
-        file: "sr-docs.md",
-        label: "Docs and user-facing text",
-        description: "Docs, comments, examples, help text, changelog, migration notes, and user-facing copy. Not code review.",
-    },
-    {
-        id: "sr-maintainability",
-        file: "sr-maintainability.md",
-        label: "Maintainability and simplicity",
-        description: "Unnecessary complexity, architecture drift, duplication, brittle abstractions, module boundaries, readability, and type/source-of-truth drift. Not speculative rewrites.",
-    },
-];
+
+const REVIEWERS = loadReviewers();
 const REVIEWER_ORDER = REVIEWERS.map((reviewer) => reviewer.id);
 const REVIEWER_BY_ID = new Map(REVIEWERS.map((reviewer) => [reviewer.id, reviewer]));
-const ALIASES = {
-    correctness: "sr-correctness",
-    bug: "sr-correctness",
-    bugs: "sr-correctness",
-    behavior: "sr-correctness",
-    test: "sr-tests",
-    tests: "sr-tests",
-    validation: "sr-tests",
-    security: "sr-security",
-    sec: "sr-security",
-    privacy: "sr-security",
-    perf: "sr-performance",
-    performance: "sr-performance",
-    scalability: "sr-performance",
-    api: "sr-api-contracts",
-    contract: "sr-api-contracts",
-    contracts: "sr-api-contracts",
-    compatibility: "sr-api-contracts",
-    release: "sr-release-risk",
-    deploy: "sr-release-risk",
-    ops: "sr-release-risk",
-    ci: "sr-release-risk",
-    docs: "sr-docs",
-    documentation: "sr-docs",
-    comments: "sr-docs",
-    maintainability: "sr-maintainability",
-    cleanup: "sr-maintainability",
-    complexity: "sr-maintainability",
-    architecture: "sr-maintainability",
-};
+const ALIASES = buildAliases(REVIEWERS);
+
 export default function specializedReviewExtension(pi) {
     pi.registerCommand("specialized-review", {
         description: "Run an isolated, specialist code review using pi-subagents without installing global prompts, skills, or subagent files.",
@@ -199,7 +123,6 @@ function reviewerFromToken(token) {
 async function inspectGit(pi, parsed) {
     const errors = [];
     const rootResult = await execGit(pi, ["rev-parse", "--show-toplevel"]);
-    const inRepo = rootResult.ok && rootResult.text.trim().length > 0;
     if (!rootResult.ok)
         errors.push(rootResult.text || "Not inside a git repository.");
     const diffBase = parsed.staged ? ["diff", "--cached"] : ["diff"];
@@ -215,7 +138,6 @@ async function inspectGit(pi, parsed) {
             errors.push(result.text);
     }
     return {
-        inRepo,
         root: rootResult.ok ? rootResult.text.trim() : "",
         mode: parsed.staged ? "staged" : "unstaged",
         status: status.text.trim(),
@@ -364,24 +286,30 @@ function buildDispatchPrompt(parsed, git, selected) {
     const target = parsed.staged ? "staged diff (`git diff --cached`)" : "current unstaged diff (`git diff`)";
     const focus = parsed.focus ? `\nAdditional focus from user: ${parsed.focus}` : "";
     const runId = new Date().toISOString().replace(/[:.]/g, "-");
-    const selectedBlocks = selected.map((id) => buildReviewerBlock(id)).join("\n\n---\n\n");
-    const taskSketch = selected
-        .map((id) => {
-        const meta = REVIEWER_BY_ID.get(id);
-        return `    { agent: "reviewer", task: "Act as ${id}. Review ${target} for ${meta.label.toLowerCase()} only, using the private specialist contract embedded below. Do not edit files. Return only XML.", output: ".pi/specialized-review/${runId}/${id}.xml", outputMode: "file-only", skill: false, acceptance: "attested" }`;
-    })
-        .join(",\n");
     return `Run the specialized code review requested through the \`pi-specialized-review\` extension.
 
 This extension keeps reviewer artifacts private: it does not install Pi prompt templates, skills, or discoverable subagent files. For this run, use the existing \`subagent\` tool from \`pi-subagents\` and launch the built-in \`reviewer\` agent with the role contracts below embedded in each task. Do not create, update, or delete persistent subagent definitions.
 
-Review target: ${target}${focus}
+${buildRunSummarySection(parsed, target, focus, selected)}
+
+${buildGitSnapshotSection(parsed, git)}
+
+${buildLaunchInstructionsSection(parsed, selected, target, runId)}
+
+${buildSpecialistContractsSection(selected)}
+
+${buildCoordinatorSynthesisSection(parsed)}`;
+}
+function buildRunSummarySection(parsed, target, focus, selected) {
+    return `Review target: ${target}${focus}
 Invocation flags: ${parsed.raw || "(none)"}
 Autofix requested: ${parsed.autofix ? "yes" : "no"}
 Subagent context: ${parsed.context}
-Selected specialist reviewers: ${selected.join(", ")}
-
-## Git snapshot used for dispatch
+Selected specialist reviewers: ${selected.join(", ")}`;
+}
+function buildGitSnapshotSection(parsed, git) {
+    const diffPrefix = parsed.staged ? "--cached " : "";
+    return `## Git snapshot used for dispatch
 
 Repository root: ${git.root || "unknown"}
 Git mode: ${git.mode}
@@ -393,25 +321,26 @@ Git inspection errors: ${git.errors.length ? git.errors.join(" | ") : "none"}
 ${truncate(git.status || "(empty)", 4000)}
 \`\`\`
 
-### git diff ${parsed.staged ? "--cached " : ""}--stat
+### git diff ${diffPrefix}--stat
 
 \`\`\`
 ${truncate(git.stat || "(empty)", 4000)}
 \`\`\`
 
-### git diff ${parsed.staged ? "--cached " : ""}--name-status
+### git diff ${diffPrefix}--name-status
 
 \`\`\`
 ${truncate(git.nameStatus || "(empty)", 4000)}
 \`\`\`
 
-### git diff ${parsed.staged ? "--cached " : ""}--numstat
+### git diff ${diffPrefix}--numstat
 
 \`\`\`
 ${truncate(git.numstat || "(empty)", 4000)}
-\`\`\`
-
-## Launch instructions
+\`\`\``;
+}
+function buildLaunchInstructionsSection(parsed, selected, target, runId) {
+    return `## Launch instructions
 
 Do not perform a full monolithic review first. Launch these reviewers in parallel, with fresh child context unless this prompt says \`fork\`. Each reviewer must inspect the repository and diff directly; the git snapshot above is only dispatch metadata.
 
@@ -420,7 +349,7 @@ Use a \`subagent\` call equivalent to this shape, adapting task strings to inclu
 \`\`\`text
 subagent({
   tasks: [
-${taskSketch}
+${buildTaskSketch(selected, target, runId)}
   ],
   context: "${parsed.context}",
   concurrency: ${Math.min(Math.max(selected.length, 1), 4)},
@@ -428,13 +357,24 @@ ${taskSketch}
 })
 \`\`\`
 
-For every selected reviewer task, include its full private specialist contract from the next section. Set \`skill: false\` to avoid injecting unrelated skills. Ask reviewers to avoid edits and to return only XML.
+For every selected reviewer task, include its full private specialist contract from the next section. Set \`skill: false\` to avoid injecting unrelated skills. Ask reviewers to avoid edits and to return only XML.`;
+}
+function buildTaskSketch(selected, target, runId) {
+    return selected
+        .map((id) => {
+        const meta = REVIEWER_BY_ID.get(id);
+        const label = meta?.label ?? id;
+        return `    { agent: "reviewer", task: "Act as ${id}. Review ${target} for ${label.toLowerCase()} only, using the private specialist contract embedded below. Do not edit files. Return only XML.", output: ".pi/specialized-review/${runId}/${id}.xml", outputMode: "file-only", skill: false, acceptance: "attested" }`;
+    })
+        .join(",\n");
+}
+function buildSpecialistContractsSection(selected) {
+    return `## Private specialist contracts for this run
 
-## Private specialist contracts for this run
-
-${selectedBlocks}
-
-## Coordinator synthesis
+${selected.map((id) => buildReviewerBlock(id)).join("\n\n---\n\n")}`;
+}
+function buildCoordinatorSynthesisSection(parsed) {
+    return `## Coordinator synthesis
 
 After the subagents return:
 
@@ -460,16 +400,82 @@ Keep the final concise and cite file paths and line numbers for all actionable f
 }
 function buildReviewerBlock(id) {
     const meta = REVIEWER_BY_ID.get(id);
-    const body = loadReviewerBody(meta.file);
-    return `### ${id}: ${meta.label}\n\nDescription: ${meta.description}\n\n${body}`;
-}
-function loadReviewerBody(fileName) {
-    const filePath = resolve(packageRoot(), "reviewers", fileName);
-    if (!existsSync(filePath)) {
-        return `Reviewer contract file missing: reviewers/${fileName}. Report this package installation problem instead of inventing a replacement contract.`;
+    if (!meta) {
+        return `### ${id}: missing reviewer\n\nReviewer contract missing from reviewers/*.md. Report this package installation problem instead of inventing a replacement contract.`;
     }
-    const raw = readFileSync(filePath, "utf8");
-    return stripFrontmatter(raw).trim();
+    return `### ${meta.id}: ${meta.label}\n\nDescription: ${meta.description}\n\n${meta.body}`;
+}
+function loadReviewers() {
+    const reviewersDir = resolve(packageRoot(), "reviewers");
+    if (!existsSync(reviewersDir))
+        return [];
+    return readdirSync(reviewersDir)
+        .filter((fileName) => fileName.endsWith(".md"))
+        .map(loadReviewer)
+        .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id));
+}
+function loadReviewer(fileName) {
+    const raw = readFileSync(resolve(packageRoot(), "reviewers", fileName), "utf8");
+    const frontmatter = parseFrontmatter(raw);
+    const id = String(frontmatter.name || fileName.replace(/\.md$/, "")).trim();
+    const description = String(frontmatter.catalogDescription || frontmatter.description || "").trim();
+    const order = Number(frontmatter.order);
+    return {
+        id,
+        file: fileName,
+        label: String(frontmatter.label || titleFromId(id)).trim(),
+        description: description || `Private reviewer contract from reviewers/${fileName}.`,
+        aliases: parseList(frontmatter.aliases),
+        order: Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER,
+        body: stripFrontmatter(raw).trim(),
+    };
+}
+function parseFrontmatter(markdown) {
+    const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+    if (!match)
+        return {};
+    const frontmatter = {};
+    for (const line of match[1].split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#"))
+            continue;
+        const separator = trimmed.indexOf(":");
+        if (separator === -1)
+            continue;
+        const key = trimmed.slice(0, separator).trim();
+        const value = trimmed.slice(separator + 1).trim();
+        frontmatter[key] = parseFrontmatterValue(value);
+    }
+    return frontmatter;
+}
+function parseFrontmatterValue(value) {
+    if (value.startsWith("[") && value.endsWith("]")) {
+        try {
+            return JSON.parse(value);
+        }
+        catch {
+            // Fall through to string parsing for hand-written frontmatter.
+        }
+    }
+    return value.replace(/^("|')|("|')$/g, "");
+}
+function parseList(value) {
+    if (Array.isArray(value))
+        return value.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
+    if (typeof value === "string")
+        return value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+    return [];
+}
+function buildAliases(reviewers) {
+    const aliases = {};
+    for (const reviewer of reviewers) {
+        for (const alias of reviewer.aliases)
+            aliases[alias] = reviewer.id;
+    }
+    return aliases;
+}
+function titleFromId(id) {
+    return id.replace(/^sr-/, "").split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 function stripFrontmatter(markdown) {
     return markdown.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");

@@ -1,5 +1,9 @@
 ---
 name: sr-correctness
+label: Functional correctness
+catalogDescription: Concrete behavior bugs, regressions, broken edge cases, and changed behavior that does not match intent. Not style, coverage, security-only, performance-only, docs, or release-process feedback.
+aliases: ["correctness", "bug", "bugs", "behavior"]
+order: 1
 description: Use for code changes to find concrete functional bugs, regressions, broken edge cases, and changed behavior that does not match the requested intent; not for style, test coverage, security-only, performance-only, docs, or release-process issues.
 tools: read, grep, find, ls, bash
 thinking: high
